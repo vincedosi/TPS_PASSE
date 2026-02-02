@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V20", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V21", layout="wide")
 
 # 2. Style CSS
 st.markdown("""
@@ -18,10 +18,10 @@ st.markdown("""
     }
     .comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .comparison-table th { background: #0E1512; color: white; padding: 10px; text-align: center; }
-    .comparison-table td { border: 1px solid #eee; padding: 8px; position: relative; text-align: right; height: 30px; }
+    .comparison-table td { border: 1px solid #eee; padding: 6px; position: relative; text-align: right; height: 30px; }
     .data-bar { position: absolute; left: 0; top: 20%; height: 60%; z-index: 0; opacity: 0.3; border-radius: 0 2px 2px 0; }
-    .cell-value { position: relative; z-index: 1; font-weight: bold; }
-    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; }
+    .cell-value { position: relative; z-index: 1; font-weight: bold; font-size: 12px; }
+    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; min-width: 150px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,10 +52,7 @@ if uploaded_file:
         c_source_detail = 'Source'              
         c_regie_groupe  = 'Source recodifiée2'  
         c_campagne      = 'Campagne recodifiée' 
-        
-        # C'est cette colonne qui devient la STAR du dashboard
         c_variante      = 'Campagne - Variante' 
-
         c_duree   = 'Durée visite'  
         c_visites = 'Visites'       
 
@@ -79,39 +76,29 @@ if uploaded_file:
             'Source':   np.repeat(df[c_source_detail].values, df['V_num'].values),
             'Regie':    np.repeat(df[c_regie_groupe].values, df['V_num'].values),
             'Campagne': np.repeat(df[c_campagne].values, df['V_num'].values),
-            'Variante': np.repeat(df[c_variante].values, df['V_num'].values) # Nouvelle colonne clé
+            'Variante': np.repeat(df[c_variante].values, df['V_num'].values)
         }).reset_index(drop=True)
 
-        # --- FILTRES SIDEBAR MODIFIÉS ---
+        # --- FILTRES ---
         st.sidebar.header("🎯 Filtres")
         sel_src = st.sidebar.multiselect("Sources", sorted(df_work['Source'].unique()))
         sel_cmp = st.sidebar.multiselect("Campagnes", sorted(df_work['Campagne'].unique()))
         
-        # --- NOUVELLE LOGIQUE TOP > 100 SUR VARIANTE ---
-        # On compte le nombre de lignes par Variante (puisque le dataset est déjà éclaté par visite, count = sum des visites)
+        # Filtre Variantes > 100
         counts = df_work['Variante'].value_counts()
-        
         exclude_low = st.sidebar.toggle("🚀 Top Variantes (>100 visites)", value=False)
-        
-        # Liste de base
         all_variants = sorted([str(r) for r in df_work['Variante'].unique()])
-        
-        # Si le bouton est actif, on ne garde que celles > 100
         var_list = all_variants
         if exclude_low:
             var_list = sorted([str(r) for r in counts.index if counts[r] >= 100])
         
-        # Le selectbox affiche maintenant les VARIANTES
-        sel_var = st.sidebar.multiselect("Variantes (ex-Régies)", var_list)
-        
+        sel_var = st.sidebar.multiselect("Variantes", var_list)
         calc_mode = st.sidebar.selectbox("Calcul des Stats", ["Global (avec 0s)", "Engagement (sans 0s)"], index=1)
 
         # Application filtres
         filtered = df_work.copy()
         if sel_src: filtered = filtered[filtered['Source'].isin(sel_src)]
         if sel_cmp: filtered = filtered[filtered['Campagne'].isin(sel_cmp)]
-        
-        # Filtre sur VARIANTE
         if sel_var: 
             filtered = filtered[filtered['Variante'].isin(sel_var)]
         elif exclude_low: 
@@ -133,16 +120,12 @@ if uploaded_file:
             c3.markdown(f'<div class="stat-card"><h3>{int(med)}s</h3><small>MÉDIANE</small></div>', unsafe_allow_html=True)
             c4.markdown(f'<div class="stat-card"><h3>{int(mean_v)}s</h3><small>MOYENNE</small></div>', unsafe_allow_html=True)
 
-            # --- GRAPHIQUE EMPILÉ PAR VARIANTE ---
+            # --- GRAPHIQUE ---
             filtered['Bucket'] = filtered['Durée'].apply(get_bucket)
             buckets = sorted(filtered['Bucket'].unique(), key=get_sort_val)
             
             fig = make_subplots(specs=[[{"secondary_y": True}]])
-            
-            # On utilise les variantes filtrées pour l'affichage
             variants_plot = sorted(filtered['Variante'].unique())
-            
-            # Palette large
             colors = px.colors.qualitative.Dark24 + px.colors.qualitative.Alphabet
             
             for i, v in enumerate(variants_plot):
@@ -150,20 +133,17 @@ if uploaded_file:
                 b_counts = v_data['Bucket'].value_counts()
                 col_code = colors[i % len(colors)]
                 
-                # Trace pour les 0s (Rebond)
                 fig.add_trace(go.Bar(
                     name=f"{v} (0s)", x=["0 sec"], y=[b_counts.get("0 sec", 0)],
                     marker_color=col_code, legendgroup=v, showlegend=False, opacity=0.6
                 ), secondary_y=True)
                 
-                # Trace pour l'Engagement
                 other_b = [b for b in buckets if b != "0 sec"]
                 fig.add_trace(go.Bar(
                     name=v, x=other_b, y=[b_counts.get(b, 0) for b in other_b],
                     marker_color=col_code, legendgroup=v, showlegend=True
                 ), secondary_y=False)
 
-            # Lignes verticales stats
             stats_colors = {"q1": "#3498db", "med": "#e74c3c", "q3": "#2ecc71", "moy": "#f39c12"}
             for val, name, col, dash in [(q1,'Q1','q1','dot'), (med,'MED','med','solid'), (q3,'Q3','q3','dot'), (mean_v,'MOY','moy','dash')]:
                 b_pos = get_bucket(val)
@@ -174,21 +154,59 @@ if uploaded_file:
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU MODIFIÉ : AFFICHAGE PAR VARIANTE ---
-            # On boucle sur les variantes au lieu des régies
+            # --- TABLEAU DÉTAILLÉ (NOUVEAU) ---
             max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
             
+            # Entête du tableau
+            table_header = """
+            <thead>
+                <tr>
+                    <th style="text-align:left;">Variante</th>
+                    <th>Volume</th>
+                    <th>0s (Rebond)</th>
+                    <th>1s - 30s (Court)</th>
+                    <th>30s - 3min (Engagé)</th>
+                    <th>> 3 min (Top)</th>
+                </tr>
+            </thead>"""
+
             for v in variants_plot:
                 v_d = filtered[filtered['Variante'] == v]
                 vol = len(v_d)
-                p_reb = (len(v_d[v_d['Durée'] == 0]) / vol * 100) if vol > 0 else 0
-                p_top = (len(v_d[v_d['Durée'] > 180]) / vol * 100) if vol > 0 else 0
-                
-                # Le nom affiché dans la première colonne est v (la Variante)
-                comp_rows.append(f"<tr><td class='regie-name'>{v}</td><td><div class='data-bar' style='width:{vol/max_v*100}%; background:#3498db;'></div><span class='cell-value'>{vol:,}</span></td><td><div class='data-bar' style='width:{p_reb}%; background:#e74c3c;'></div><span class='cell-value'>{p_reb:.1f}%</span></td><td><div class='data-bar' style='width:{p_top}%; background:#2ecc71;'></div><span class='cell-value'>{p_top:.1f}%</span></td></tr>")
+                if vol > 0:
+                    # Calcul des 4 seaux
+                    c_0 = len(v_d[v_d['Durée'] == 0])
+                    c_1_30 = len(v_d[(v_d['Durée'] >= 1) & (v_d['Durée'] <= 30)])
+                    c_30_180 = len(v_d[(v_d['Durée'] > 30) & (v_d['Durée'] <= 180)])
+                    c_180_plus = len(v_d[v_d['Durée'] > 180])
+                    
+                    # Pourcentages
+                    p0 = (c_0 / vol * 100)
+                    p1 = (c_1_30 / vol * 100)
+                    p2 = (c_30_180 / vol * 100)
+                    p3 = (c_180_plus / vol * 100)
+                    
+                    # Couleurs des barres
+                    bar_vol = f"<div class='data-bar' style='width:{vol/max_v*100}%; background:#3498db;'></div>"
+                    bar_0   = f"<div class='data-bar' style='width:{p0}%; background:#e74c3c;'></div>" # Rouge
+                    bar_1   = f"<div class='data-bar' style='width:{p1}%; background:#f1c40f;'></div>" # Jaune
+                    bar_2   = f"<div class='data-bar' style='width:{p2}%; background:#3498db;'></div>" # Bleu
+                    bar_3   = f"<div class='data-bar' style='width:{p3}%; background:#2ecc71;'></div>" # Vert
 
-            st.write(f"<table class='comparison-table'><thead><tr><th>Variante</th><th>Volume</th><th>Rebond</th><th>Top (+3m)</th></tr></thead><tbody>{''.join(comp_rows)}</tbody></table>", unsafe_allow_html=True)
+                    row_html = f"""
+                    <tr>
+                        <td class='regie-name'>{v}</td>
+                        <td>{bar_vol}<span class='cell-value'>{vol:,}</span></td>
+                        <td>{bar_0}<span class='cell-value'>{p0:.1f}%</span></td>
+                        <td>{bar_1}<span class='cell-value'>{p1:.1f}%</span></td>
+                        <td>{bar_2}<span class='cell-value'>{p2:.1f}%</span></td>
+                        <td>{bar_3}<span class='cell-value'>{p3:.1f}%</span></td>
+                    </tr>
+                    """
+                    comp_rows.append(row_html)
+
+            st.write(f"<table class='comparison-table'>{table_header}<tbody>{''.join(comp_rows)}</tbody></table>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Une erreur s'est produite : {e}")
