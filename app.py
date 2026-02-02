@@ -6,9 +6,9 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V22", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V23", layout="wide")
 
-# 2. Style CSS
+# 2. Style CSS (Identique à votre original)
 st.markdown("""
     <style>
     .main { background-color: #F6FBF8; }
@@ -16,12 +16,12 @@ st.markdown("""
         background-color: #1C7C54; color: white; padding: 15px;
         border-radius: 10px; text-align: center; margin-bottom: 10px;
     }
-    .comparison-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .comparison-table th { background: #0E1512; color: white; padding: 8px; text-align: center; font-size: 11px; }
-    .comparison-table td { border: 1px solid #eee; padding: 5px; position: relative; text-align: right; height: 35px; vertical-align: middle; }
-    .data-bar { position: absolute; left: 0; top: 25%; height: 50%; z-index: 0; opacity: 0.3; border-radius: 0 2px 2px 0; }
-    .cell-value { position: relative; z-index: 1; font-weight: bold; font-size: 11px; color: #333; }
-    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; min-width: 140px; padding-left: 10px !important; }
+    .comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .comparison-table th { background: #0E1512; color: white; padding: 10px; text-align: center; }
+    .comparison-table td { border: 1px solid #eee; padding: 8px; position: relative; text-align: right; height: 30px; }
+    .data-bar { position: absolute; left: 0; top: 20%; height: 60%; z-index: 0; opacity: 0.3; border-radius: 0 2px 2px 0; }
+    .cell-value { position: relative; z-index: 1; font-weight: bold; }
+    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; min-width: 200px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -48,7 +48,7 @@ if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DATA")
 
-        # --- 🔧 MAPPING DES COLONNES ---
+        # --- MAPPING COLONNES ---
         c_source_detail = 'Source'              
         c_regie_groupe  = 'Source recodifiée2'  
         c_campagne      = 'Campagne recodifiée' 
@@ -63,14 +63,14 @@ if uploaded_file:
             st.error(f"❌ Colonnes introuvables : {missing}")
             st.stop()
 
-        # Nettoyage
+        # Nettoyage simple
         for col in [c_source_detail, c_regie_groupe, c_campagne, c_variante]:
             df[col] = df[col].astype(str).replace('nan', 'N/A')
 
         df['D_num'] = pd.to_numeric(df[c_duree], errors='coerce').fillna(0)
         df['V_num'] = pd.to_numeric(df[c_visites], errors='coerce').fillna(0).astype(int)
 
-        # Création du dataset
+        # Création du dataset éclaté
         df_work = pd.DataFrame({
             'Durée':    np.repeat(df['D_num'].values, df['V_num'].values),
             'Source':   np.repeat(df[c_source_detail].values, df['V_num'].values),
@@ -154,38 +154,20 @@ if uploaded_file:
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU DÉTAILLÉ (CORRECTION DU BUG D'AFFICHAGE) ---
+            # --- TABLEAU REVENU AU CODE INITIAL ---
             max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
             
-            # Entête du tableau
-            table_header = """
-            <thead>
-                <tr>
-                    <th style="text-align:left;">Variante</th>
-                    <th>Volume</th>
-                    <th>0s (Rebond)</th>
-                    <th>1-30s</th>
-                    <th>30s-3min (Eng.)</th>
-                    <th>> 3 min</th>
-                </tr>
-            </thead>"""
-
+            # Calcul et création des lignes HTML
             for v in variants_plot:
                 v_d = filtered[filtered['Variante'] == v]
                 vol = len(v_d)
+                
                 if vol > 0:
-                    # Calcul des 4 catégories
-                    # 1. Rebond (Exactement 0)
+                    # Calculs des tranches
                     c_0 = len(v_d[v_d['Durée'] == 0])
-                    
-                    # 2. Court (Entre 0 exclu et 30 inclus)
                     c_1_30 = len(v_d[(v_d['Durée'] > 0) & (v_d['Durée'] <= 30)])
-                    
-                    # 3. Engagé (Entre 30 exclu et 180 inclus)
                     c_30_180 = len(v_d[(v_d['Durée'] > 30) & (v_d['Durée'] <= 180)])
-                    
-                    # 4. Top (Plus de 180)
                     c_180_plus = len(v_d[v_d['Durée'] > 180])
                     
                     # Pourcentages
@@ -194,28 +176,33 @@ if uploaded_file:
                     p2 = (c_30_180 / vol * 100)
                     p3 = (c_180_plus / vol * 100)
                     
-                    # Construction des barres colorées
-                    bar_vol = f"<div class='data-bar' style='width:{vol/max_v*100}%; background:#A9A9A9;'></div>"
-                    bar_0   = f"<div class='data-bar' style='width:{p0}%; background:#e74c3c;'></div>" # Rouge
-                    bar_1   = f"<div class='data-bar' style='width:{p1}%; background:#f1c40f;'></div>" # Jaune
-                    bar_2   = f"<div class='data-bar' style='width:{p2}%; background:#3498db;'></div>" # Bleu
-                    bar_3   = f"<div class='data-bar' style='width:{p3}%; background:#2ecc71;'></div>" # Vert
-
-                    row_html = f"""
+                    # Création ligne HTML (Exactement comme V17)
+                    comp_rows.append(f"""
                     <tr>
                         <td class='regie-name'>{v}</td>
-                        <td>{bar_vol}<span class='cell-value'>{vol:,}</span></td>
-                        <td>{bar_0}<span class='cell-value'>{p0:.1f}%</span></td>
-                        <td>{bar_1}<span class='cell-value'>{p1:.1f}%</span></td>
-                        <td>{bar_2}<span class='cell-value'>{p2:.1f}%</span></td>
-                        <td>{bar_3}<span class='cell-value'>{p3:.1f}%</span></td>
-                    </tr>
-                    """
-                    comp_rows.append(row_html)
+                        <td><div class='data-bar' style='width:{vol/max_v*100}%; background:#A9A9A9;'></div><span class='cell-value'>{vol:,}</span></td>
+                        <td><div class='data-bar' style='width:{p0}%; background:#e74c3c;'></div><span class='cell-value'>{p0:.1f}%</span></td>
+                        <td><div class='data-bar' style='width:{p1}%; background:#f1c40f;'></div><span class='cell-value'>{p1:.1f}%</span></td>
+                        <td><div class='data-bar' style='width:{p2}%; background:#3498db;'></div><span class='cell-value'>{p2:.1f}%</span></td>
+                        <td><div class='data-bar' style='width:{p3}%; background:#2ecc71;'></div><span class='cell-value'>{p3:.1f}%</span></td>
+                    </tr>""")
 
-            # NOTE: Utilisation de st.markdown au lieu de st.write pour éviter le bug d'affichage HTML
-            final_table_html = f"<table class='comparison-table'>{table_header}<tbody>{''.join(comp_rows)}</tbody></table>"
-            st.markdown(final_table_html, unsafe_allow_html=True)
+            # Affichage FINAL (Méthode V17 qui marchait)
+            st.write(f"""
+            <table class='comparison-table'>
+                <thead>
+                    <tr>
+                        <th>Variante</th>
+                        <th>Volume</th>
+                        <th>Rebond (0s)</th>
+                        <th>Court (1-30s)</th>
+                        <th>Engagé (30s-3m)</th>
+                        <th>Top (>3m)</th>
+                    </tr>
+                </thead>
+                <tbody>{''.join(comp_rows)}</tbody>
+            </table>
+            """, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Une erreur s'est produite : {e}")
