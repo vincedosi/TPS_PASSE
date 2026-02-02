@@ -3,10 +3,10 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly.express as px  # Ajout pour la palette de couleurs étendue
+import plotly.express as px
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V19", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V20", layout="wide")
 
 # 2. Style CSS
 st.markdown("""
@@ -53,7 +53,7 @@ if uploaded_file:
         c_regie_groupe  = 'Source recodifiée2'  
         c_campagne      = 'Campagne recodifiée' 
         
-        # AJOUT DE LA COLONNE VARIANTE POUR L'EMPILAGE
+        # C'est cette colonne qui devient la STAR du dashboard
         c_variante      = 'Campagne - Variante' 
 
         c_duree   = 'Durée visite'  
@@ -73,35 +73,49 @@ if uploaded_file:
         df['D_num'] = pd.to_numeric(df[c_duree], errors='coerce').fillna(0)
         df['V_num'] = pd.to_numeric(df[c_visites], errors='coerce').fillna(0).astype(int)
 
-        # Création du dataset éclaté avec la Variante
+        # Création du dataset
         df_work = pd.DataFrame({
             'Durée':    np.repeat(df['D_num'].values, df['V_num'].values),
             'Source':   np.repeat(df[c_source_detail].values, df['V_num'].values),
             'Regie':    np.repeat(df[c_regie_groupe].values, df['V_num'].values),
             'Campagne': np.repeat(df[c_campagne].values, df['V_num'].values),
-            'Variante': np.repeat(df[c_variante].values, df['V_num'].values) # Nouvelle donnée
+            'Variante': np.repeat(df[c_variante].values, df['V_num'].values) # Nouvelle colonne clé
         }).reset_index(drop=True)
 
-        # --- FILTRES ---
+        # --- FILTRES SIDEBAR MODIFIÉS ---
         st.sidebar.header("🎯 Filtres")
         sel_src = st.sidebar.multiselect("Sources", sorted(df_work['Source'].unique()))
         sel_cmp = st.sidebar.multiselect("Campagnes", sorted(df_work['Campagne'].unique()))
         
-        counts = df_work['Regie'].value_counts()
-        exclude_low = st.sidebar.toggle("🚀 Top Régies (>100 visites)", value=False)
-        reg_list = sorted([str(r) for r in df_work['Regie'].unique()])
-        if exclude_low:
-            reg_list = sorted([str(r) for r in counts.index if counts[r] >= 100])
+        # --- NOUVELLE LOGIQUE TOP > 100 SUR VARIANTE ---
+        # On compte le nombre de lignes par Variante (puisque le dataset est déjà éclaté par visite, count = sum des visites)
+        counts = df_work['Variante'].value_counts()
         
-        sel_reg = st.sidebar.multiselect("Régies", reg_list)
+        exclude_low = st.sidebar.toggle("🚀 Top Variantes (>100 visites)", value=False)
+        
+        # Liste de base
+        all_variants = sorted([str(r) for r in df_work['Variante'].unique()])
+        
+        # Si le bouton est actif, on ne garde que celles > 100
+        var_list = all_variants
+        if exclude_low:
+            var_list = sorted([str(r) for r in counts.index if counts[r] >= 100])
+        
+        # Le selectbox affiche maintenant les VARIANTES
+        sel_var = st.sidebar.multiselect("Variantes (ex-Régies)", var_list)
+        
         calc_mode = st.sidebar.selectbox("Calcul des Stats", ["Global (avec 0s)", "Engagement (sans 0s)"], index=1)
 
         # Application filtres
         filtered = df_work.copy()
         if sel_src: filtered = filtered[filtered['Source'].isin(sel_src)]
         if sel_cmp: filtered = filtered[filtered['Campagne'].isin(sel_cmp)]
-        if sel_reg: filtered = filtered[filtered['Regie'].isin(sel_reg)]
-        elif exclude_low: filtered = filtered[filtered['Regie'].isin(reg_list)]
+        
+        # Filtre sur VARIANTE
+        if sel_var: 
+            filtered = filtered[filtered['Variante'].isin(sel_var)]
+        elif exclude_low: 
+            filtered = filtered[filtered['Variante'].isin(var_list)]
 
         if not filtered.empty:
             # Stats KPI
@@ -125,10 +139,10 @@ if uploaded_file:
             
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             
-            # On récupère toutes les variantes présentes pour les empiler
+            # On utilise les variantes filtrées pour l'affichage
             variants_plot = sorted(filtered['Variante'].unique())
             
-            # Palette large automatique (car potentiellement beaucoup de variantes)
+            # Palette large
             colors = px.colors.qualitative.Dark24 + px.colors.qualitative.Alphabet
             
             for i, v in enumerate(variants_plot):
@@ -155,23 +169,26 @@ if uploaded_file:
                 b_pos = get_bucket(val)
                 fig.add_vline(x=b_pos, line_width=2, line_dash=dash, line_color=stats_colors[col])
 
-            fig.update_layout(barmode='stack', height=600, title_text="Distribution des durées (Empilé par Variante)", xaxis_title="Durée", legend=dict(orientation="h", y=-0.3))
+            fig.update_layout(barmode='stack', height=600, title_text="Distribution par Variante", xaxis_title="Durée", legend=dict(orientation="h", y=-0.3))
             fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False)
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU COMPARATIF (reste par Régie pour lisibilité) ---
-            regies_plot = sorted(filtered['Regie'].unique())
-            max_v = filtered['Regie'].value_counts().max()
+            # --- TABLEAU MODIFIÉ : AFFICHAGE PAR VARIANTE ---
+            # On boucle sur les variantes au lieu des régies
+            max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
-            for r in regies_plot:
-                r_d = filtered[filtered['Regie'] == r]
-                vol = len(r_d)
-                p_reb = (len(r_d[r_d['Durée'] == 0]) / vol * 100) if vol > 0 else 0
-                p_top = (len(r_d[r_d['Durée'] > 180]) / vol * 100) if vol > 0 else 0
-                comp_rows.append(f"<tr><td class='regie-name'>{r}</td><td><div class='data-bar' style='width:{vol/max_v*100}%; background:#3498db;'></div><span class='cell-value'>{vol:,}</span></td><td><div class='data-bar' style='width:{p_reb}%; background:#e74c3c;'></div><span class='cell-value'>{p_reb:.1f}%</span></td><td><div class='data-bar' style='width:{p_top}%; background:#2ecc71;'></div><span class='cell-value'>{p_top:.1f}%</span></td></tr>")
+            
+            for v in variants_plot:
+                v_d = filtered[filtered['Variante'] == v]
+                vol = len(v_d)
+                p_reb = (len(v_d[v_d['Durée'] == 0]) / vol * 100) if vol > 0 else 0
+                p_top = (len(v_d[v_d['Durée'] > 180]) / vol * 100) if vol > 0 else 0
+                
+                # Le nom affiché dans la première colonne est v (la Variante)
+                comp_rows.append(f"<tr><td class='regie-name'>{v}</td><td><div class='data-bar' style='width:{vol/max_v*100}%; background:#3498db;'></div><span class='cell-value'>{vol:,}</span></td><td><div class='data-bar' style='width:{p_reb}%; background:#e74c3c;'></div><span class='cell-value'>{p_reb:.1f}%</span></td><td><div class='data-bar' style='width:{p_top}%; background:#2ecc71;'></div><span class='cell-value'>{p_top:.1f}%</span></td></tr>")
 
-            st.write(f"<table class='comparison-table'><thead><tr><th>Régie</th><th>Volume</th><th>Rebond</th><th>Top (+3m)</th></tr></thead><tbody>{''.join(comp_rows)}</tbody></table>", unsafe_allow_html=True)
+            st.write(f"<table class='comparison-table'><thead><tr><th>Variante</th><th>Volume</th><th>Rebond</th><th>Top (+3m)</th></tr></thead><tbody>{''.join(comp_rows)}</tbody></table>", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Une erreur s'est produite : {e}")
