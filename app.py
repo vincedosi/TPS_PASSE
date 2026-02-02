@@ -3,9 +3,10 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.express as px  # Ajout pour la palette de couleurs étendue
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V18", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V19", layout="wide")
 
 # 2. Style CSS
 st.markdown("""
@@ -47,41 +48,38 @@ if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DATA")
 
-        # --- 🔧 MAPPING DES COLONNES (Basé sur votre liste) ---
-        # Colonnes contenant du TEXTE
-        c_source_detail = 'Source'              # Pour le détail
-        c_regie_groupe  = 'Source recodifiée2'  # Pour le regroupement principal (Régie)
-        c_campagne      = 'Campagne recodifiée' # Pour les filtres campagnes
+        # --- 🔧 MAPPING DES COLONNES ---
+        c_source_detail = 'Source'              
+        c_regie_groupe  = 'Source recodifiée2'  
+        c_campagne      = 'Campagne recodifiée' 
+        
+        # AJOUT DE LA COLONNE VARIANTE POUR L'EMPILAGE
+        c_variante      = 'Campagne - Variante' 
 
-        # Colonnes contenant des CHIFFRES
-        c_duree   = 'Durée visite'  # Durée en secondes
-        c_visites = 'Visites'       # Nombre de visites (Poids)
-        # ------------------------------------------------------
+        c_duree   = 'Durée visite'  
+        c_visites = 'Visites'       
 
-        # Vérification de sécurité
-        required_cols = [c_source_detail, c_regie_groupe, c_campagne, c_duree, c_visites]
+        # Vérification
+        required_cols = [c_source_detail, c_regie_groupe, c_campagne, c_duree, c_visites, c_variante]
         missing = [c for c in required_cols if c not in df.columns]
         if missing:
             st.error(f"❌ Colonnes introuvables : {missing}")
-            st.warning(f"Colonnes détectées dans le fichier : {list(df.columns)}")
             st.stop()
 
-        # Nettoyage des données
-        # 1. Conversion des textes
-        for col in [c_source_detail, c_regie_groupe, c_campagne]:
+        # Nettoyage
+        for col in [c_source_detail, c_regie_groupe, c_campagne, c_variante]:
             df[col] = df[col].astype(str).replace('nan', 'N/A')
 
-        # 2. Conversion des chiffres (Force en numérique, remplace erreurs par 0)
         df['D_num'] = pd.to_numeric(df[c_duree], errors='coerce').fillna(0)
         df['V_num'] = pd.to_numeric(df[c_visites], errors='coerce').fillna(0).astype(int)
 
-        # Création du dataset de travail (Répétition des lignes selon le volume de visites)
-        # Cela permet de calculer les médianes correctement pondérées
+        # Création du dataset éclaté avec la Variante
         df_work = pd.DataFrame({
             'Durée':    np.repeat(df['D_num'].values, df['V_num'].values),
             'Source':   np.repeat(df[c_source_detail].values, df['V_num'].values),
             'Regie':    np.repeat(df[c_regie_groupe].values, df['V_num'].values),
-            'Campagne': np.repeat(df[c_campagne].values, df['V_num'].values)
+            'Campagne': np.repeat(df[c_campagne].values, df['V_num'].values),
+            'Variante': np.repeat(df[c_variante].values, df['V_num'].values) # Nouvelle donnée
         }).reset_index(drop=True)
 
         # --- FILTRES ---
@@ -89,7 +87,6 @@ if uploaded_file:
         sel_src = st.sidebar.multiselect("Sources", sorted(df_work['Source'].unique()))
         sel_cmp = st.sidebar.multiselect("Campagnes", sorted(df_work['Campagne'].unique()))
         
-        # Logique Top Régies
         counts = df_work['Regie'].value_counts()
         exclude_low = st.sidebar.toggle("🚀 Top Régies (>100 visites)", value=False)
         reg_list = sorted([str(r) for r in df_work['Regie'].unique()])
@@ -99,7 +96,7 @@ if uploaded_file:
         sel_reg = st.sidebar.multiselect("Régies", reg_list)
         calc_mode = st.sidebar.selectbox("Calcul des Stats", ["Global (avec 0s)", "Engagement (sans 0s)"], index=1)
 
-        # Application des filtres au dataset
+        # Application filtres
         filtered = df_work.copy()
         if sel_src: filtered = filtered[filtered['Source'].isin(sel_src)]
         if sel_cmp: filtered = filtered[filtered['Campagne'].isin(sel_cmp)]
@@ -107,63 +104,64 @@ if uploaded_file:
         elif exclude_low: filtered = filtered[filtered['Regie'].isin(reg_list)]
 
         if not filtered.empty:
-            # Calculs Statistiques
+            # Stats KPI
             d_all = filtered['Durée'].sort_values().values
             d_target = d_all if calc_mode == "Global (avec 0s)" else d_all[d_all > 0]
             n = len(filtered)
             
-            # KPI
             rebond = (len(filtered[filtered['Durée'] == 0]) / n) * 100
             mean_v = np.mean(d_target) if len(d_target) > 0 else 0
             q1, med, q3 = (np.percentile(d_target, [25, 50, 75]) if len(d_target) > 0 else [0,0,0])
 
-            # Affichage KPI
             c1, c2, c3, c4 = st.columns(4)
             c1.markdown(f'<div class="stat-card"><h3>{n:,}</h3><small>SESSIONS</small></div>', unsafe_allow_html=True)
             c2.markdown(f'<div class="stat-card"><h3>{rebond:.1f}%</h3><small>REBOND</small></div>', unsafe_allow_html=True)
             c3.markdown(f'<div class="stat-card"><h3>{int(med)}s</h3><small>MÉDIANE</small></div>', unsafe_allow_html=True)
             c4.markdown(f'<div class="stat-card"><h3>{int(mean_v)}s</h3><small>MOYENNE</small></div>', unsafe_allow_html=True)
 
-            # --- GRAPHIQUE ---
+            # --- GRAPHIQUE EMPILÉ PAR VARIANTE ---
             filtered['Bucket'] = filtered['Durée'].apply(get_bucket)
             buckets = sorted(filtered['Bucket'].unique(), key=get_sort_val)
             
             fig = make_subplots(specs=[[{"secondary_y": True}]])
-            regies_plot = sorted(filtered['Regie'].unique())
             
-            # Couleurs
-            color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-            regie_colors = {r: color_palette[i % len(color_palette)] for i, r in enumerate(regies_plot)}
-
-            for r in regies_plot:
-                r_data = filtered[filtered['Regie'] == r]
-                b_counts = r_data['Bucket'].value_counts()
+            # On récupère toutes les variantes présentes pour les empiler
+            variants_plot = sorted(filtered['Variante'].unique())
+            
+            # Palette large automatique (car potentiellement beaucoup de variantes)
+            colors = px.colors.qualitative.Dark24 + px.colors.qualitative.Alphabet
+            
+            for i, v in enumerate(variants_plot):
+                v_data = filtered[filtered['Variante'] == v]
+                b_counts = v_data['Bucket'].value_counts()
+                col_code = colors[i % len(colors)]
                 
-                # Barres 0s (Rebond)
+                # Trace pour les 0s (Rebond)
                 fig.add_trace(go.Bar(
-                    name=f"{r} (0s)", x=["0 sec"], y=[b_counts.get("0 sec", 0)],
-                    marker_color=regie_colors[r], legendgroup=r, showlegend=False
+                    name=f"{v} (0s)", x=["0 sec"], y=[b_counts.get("0 sec", 0)],
+                    marker_color=col_code, legendgroup=v, showlegend=False, opacity=0.6
                 ), secondary_y=True)
                 
-                # Barres Engagement
+                # Trace pour l'Engagement
                 other_b = [b for b in buckets if b != "0 sec"]
                 fig.add_trace(go.Bar(
-                    name=r, x=other_b, y=[b_counts.get(b, 0) for b in other_b],
-                    marker_color=regie_colors[r], legendgroup=r, showlegend=True
+                    name=v, x=other_b, y=[b_counts.get(b, 0) for b in other_b],
+                    marker_color=col_code, legendgroup=v, showlegend=True
                 ), secondary_y=False)
 
-            # Lignes verticales statistiques
+            # Lignes verticales stats
             stats_colors = {"q1": "#3498db", "med": "#e74c3c", "q3": "#2ecc71", "moy": "#f39c12"}
             for val, name, col, dash in [(q1,'Q1','q1','dot'), (med,'MED','med','solid'), (q3,'Q3','q3','dot'), (mean_v,'MOY','moy','dash')]:
                 b_pos = get_bucket(val)
                 fig.add_vline(x=b_pos, line_width=2, line_dash=dash, line_color=stats_colors[col])
 
-            fig.update_layout(barmode='stack', height=600, title_text="Distribution des durées par Régie", xaxis_title="Durée", legend=dict(orientation="h", y=-0.2))
+            fig.update_layout(barmode='stack', height=600, title_text="Distribution des durées (Empilé par Variante)", xaxis_title="Durée", legend=dict(orientation="h", y=-0.3))
             fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False)
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU ---
+            # --- TABLEAU COMPARATIF (reste par Régie pour lisibilité) ---
+            regies_plot = sorted(filtered['Regie'].unique())
             max_v = filtered['Regie'].value_counts().max()
             comp_rows = []
             for r in regies_plot:
