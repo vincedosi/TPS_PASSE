@@ -5,27 +5,81 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.express as px
 
-# 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V25", layout="wide")
+# 1. Configuration Page & Thèmes
+st.set_page_config(page_title="Dashboard Analytics V26", layout="wide")
 
-# 2. Style CSS
-st.markdown("""
-    <style>
-    .main { background-color: #F6FBF8; }
-    .stat-card {
-        background-color: #1C7C54; color: white; padding: 15px;
-        border-radius: 10px; text-align: center; margin-bottom: 10px;
+# --- GESTION DES THÈMES ---
+# Définition des palettes de couleurs selon le corps d'armée
+THEMES = {
+    "Marine (Mer)": {
+        "primary": "#0A2463",       # Bleu Marine Profond
+        "card_bg": "#0A2463",       # Fond des cartes KPI
+        "bar_vol": "#3E92CC",       # Barre de volume (Bleu clair)
+        "palette": ['#0A2463', '#3E92CC', '#247BA0', '#DFF3E3', '#60A5FA', '#1E3A8A', '#93C5FD'], # Dégradé Bleus
+        "bg_main": "#F0F4F8"        # Fond très clair bleuté
+    },
+    "Air (Ciel)": {
+        "primary": "#0077B6",       # Bleu Ciel Vif
+        "card_bg": "#0077B6",       # Fond des cartes KPI
+        "bar_vol": "#90E0EF",       # Barre de volume (Cyan très clair)
+        "palette": ['#0077B6', '#0096C7', '#48CAE4', '#90E0EF', '#ADE8F4', '#023E8A', '#CAF0F8'], # Dégradé Ciels
+        "bg_main": "#F5FBFF"        # Fond blanc/ciel
+    },
+    "Terre (Sol)": {
+        "primary": "#2D3E29",       # Vert Armée / Kaki foncé
+        "card_bg": "#3A5A40",       # Fond des cartes KPI
+        "bar_vol": "#A3B18A",       # Barre de volume (Sauge)
+        "palette": ['#3A5A40', '#588157', '#A3B18A', '#DAD7CD', '#344E41', '#606C38', '#283618'], # Dégradé Verts/Terres
+        "bg_main": "#F7F8F6"        # Fond beige/vert très pâle
     }
-    .comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .comparison-table th { background: #0E1512; color: white; padding: 10px; text-align: center; }
-    .comparison-table td { border: 1px solid #eee; padding: 8px; position: relative; text-align: right; height: 30px; }
-    .data-bar { position: absolute; left: 0; top: 20%; height: 60%; z-index: 0; opacity: 0.3; border-radius: 0 2px 2px 0; }
-    .cell-value { position: relative; z-index: 1; font-weight: bold; }
-    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; min-width: 200px; }
+}
+
+# 2. Sidebar : Configuration & Choix du Thème
+st.sidebar.title("⚙️ Configuration")
+
+# SÉLECTEUR DE THÈME
+selected_theme_name = st.sidebar.selectbox("🎨 Thème Visuel", list(THEMES.keys()), index=0)
+current_theme = THEMES[selected_theme_name]
+
+uploaded_file = st.sidebar.file_uploader("Charger le fichier de données", type=["xlsx"])
+
+# 3. Style CSS DYNAMIQUE (Injecte les couleurs du thème choisi)
+st.markdown(f"""
+    <style>
+    .main {{ background-color: {current_theme['bg_main']}; }}
+    
+    /* Cards KPI style 'Hotaru' : sombre, plat, ombre légère */
+    .stat-card {{
+        background-color: {current_theme['card_bg']}; 
+        color: white; 
+        padding: 20px;
+        border-radius: 8px; 
+        text-align: center; 
+        margin-bottom: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }}
+    .stat-card h3 {{ color: white !important; margin: 0; font-size: 28px; }}
+    .stat-card small {{ text-transform: uppercase; letter-spacing: 1px; font-size: 12px; opacity: 0.9; }}
+
+    /* Tableau */
+    .comparison-table {{ width: 100%; border-collapse: separate; border-spacing: 0 5px; font-size: 13px; }}
+    .comparison-table th {{ 
+        background: #2C3E50; /* Gris sombre neutre pour l'entête */
+        color: white; padding: 12px; text-align: center; font-weight: 500; letter-spacing: 0.5px;
+        border-radius: 4px 4px 0 0;
+    }}
+    .comparison-table tr {{ background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}
+    .comparison-table td {{ border: none; padding: 10px; position: relative; text-align: right; height: 40px; vertical-align: middle; }}
+    .comparison-table td:first-child {{ border-radius: 4px 0 0 4px; }}
+    .comparison-table td:last-child {{ border-radius: 0 4px 4px 0; }}
+    
+    .data-bar {{ position: absolute; left: 0; top: 25%; height: 50%; z-index: 0; opacity: 0.25; border-radius: 0 2px 2px 0; }}
+    .cell-value {{ position: relative; z-index: 1; font-weight: bold; color: #444; }}
+    .regie-name {{ text-align: left !important; font-weight: bold; color: {current_theme['primary']}; min-width: 200px; }}
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Fonctions utilitaires
+# 4. Fonctions utilitaires
 def get_bucket(d):
     if d == 0: return "0 sec"
     if d <= 60: return f"{int(d)} sec"
@@ -40,10 +94,7 @@ def get_sort_val(b):
     try: return int(b.split("-")[0].replace(" sec", ""))
     except: return 0
 
-# 4. Sidebar & Chargement
-st.sidebar.title("⚓ Configuration")
-uploaded_file = st.sidebar.file_uploader("Charger l'Excel Marine", type=["xlsx"])
-
+# 5. Logique Principale
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DATA")
@@ -125,26 +176,32 @@ if uploaded_file:
             
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             variants_plot = sorted(filtered['Variante'].unique())
-            colors = px.colors.qualitative.Dark24 + px.colors.qualitative.Alphabet
+            
+            # Utilisation de la palette du thème
+            theme_palette = current_theme['palette']
             
             # Histogramme (Variantes)
             for i, v in enumerate(variants_plot):
                 v_data = filtered[filtered['Variante'] == v]
                 b_counts = v_data['Bucket'].value_counts()
-                col_code = colors[i % len(colors)]
                 
+                # Couleur cyclique basée sur le thème
+                col_code = theme_palette[i % len(theme_palette)]
+                
+                # Trace pour les 0s (Rebond) - AXE SECONDAIRE (GAUCHE MAINTENANT)
                 fig.add_trace(go.Bar(
                     name=v, x=["0 sec"], y=[b_counts.get("0 sec", 0)],
                     marker_color=col_code, legendgroup=v, showlegend=False, opacity=0.6
-                ), secondary_y=True)
+                ), secondary_y=True) # Sera mis à gauche plus bas
                 
+                # Trace pour l'Engagement - AXE PRINCIPAL (DROITE MAINTENANT)
                 other_b = [b for b in buckets if b != "0 sec"]
                 fig.add_trace(go.Bar(
                     name=v, x=other_b, y=[b_counts.get(b, 0) for b in other_b],
                     marker_color=col_code, legendgroup=v, showlegend=True
-                ), secondary_y=False)
+                ), secondary_y=False) # Sera mis à droite plus bas
 
-            # --- AJOUT DES LIGNES STATS DANS LA LÉGENDE ---
+            # --- LÉGENDE STATS ---
             stats_config = [
                 (q1, "Q1 (25%)", "#3498db", "dot"),
                 (med, "MÉDIANE", "#e74c3c", "solid"),
@@ -154,40 +211,38 @@ if uploaded_file:
 
             for val, label, color, dash in stats_config:
                 b_pos = get_bucket(val)
-                
-                # 1. La ligne verticale VISIBLE sur le graph
                 fig.add_vline(x=b_pos, line_width=3, line_dash=dash, line_color=color)
-                
-                # 2. La trace "FANTÔME" pour apparaître dans la LÉGENDE
+                # Ligne fantôme pour légende
                 fig.add_trace(go.Scatter(
-                    x=[None], y=[None],
-                    mode='lines',
+                    x=[None], y=[None], mode='lines',
                     line=dict(color=color, width=3, dash=dash),
-                    name=f"{label} : {int(val)}s", # On met la valeur dans la légende !
-                    showlegend=True
+                    name=f"{label} : {int(val)}s", showlegend=True
                 ), secondary_y=False)
 
-            # Mise en page avec LÉGENDE EN HAUT
+            # MISE EN PAGE & INVERSION DES AXES
             fig.update_layout(
                 barmode='stack', 
                 height=650, 
-                title_text="Distribution par Variante", 
+                title_text="Distribution des durées par Variante", 
                 xaxis_title="Durée",
                 legend=dict(
                     orientation="h", 
-                    y=1.12,          # Position tout en haut
-                    x=0.5, 
-                    xanchor="center",
+                    y=1.12, x=0.5, xanchor="center",
                     bgcolor="rgba(255,255,255,0.8)"
                 ),
-                margin=dict(t=100) # Marge en haut pour laisser la place à la légende
+                margin=dict(t=100)
             )
             
-            fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False)
-            fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
+            # --- C'EST ICI QU'ON INVERSE LES AXES ---
+            # secondary_y=True correspond aux barres 0s (Rebond) -> On le force à GAUCHE ('left')
+            fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True, side="left", showgrid=False)
+            
+            # secondary_y=False correspond aux barres Engagement -> On le force à DROITE ('right')
+            fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False, side="right", showgrid=True)
+
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU (Version HTML V23 qui marche) ---
+            # --- TABLEAU ---
             max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
             
@@ -206,10 +261,13 @@ if uploaded_file:
                     p2 = (c_30_180 / vol * 100)
                     p3 = (c_180_plus / vol * 100)
                     
+                    # Barre de volume dynamique selon le thème
+                    bar_vol_color = current_theme['bar_vol']
+
                     comp_rows.append(f"""
                     <tr>
                         <td class='regie-name'>{v}</td>
-                        <td><div class='data-bar' style='width:{vol/max_v*100}%; background:#A9A9A9;'></div><span class='cell-value'>{vol:,}</span></td>
+                        <td><div class='data-bar' style='width:{vol/max_v*100}%; background:{bar_vol_color};'></div><span class='cell-value'>{vol:,}</span></td>
                         <td><div class='data-bar' style='width:{p0}%; background:#e74c3c;'></div><span class='cell-value'>{p0:.1f}%</span></td>
                         <td><div class='data-bar' style='width:{p1}%; background:#f1c40f;'></div><span class='cell-value'>{p1:.1f}%</span></td>
                         <td><div class='data-bar' style='width:{p2}%; background:#3498db;'></div><span class='cell-value'>{p2:.1f}%</span></td>
