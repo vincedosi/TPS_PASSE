@@ -6,80 +6,61 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 
 # 1. Configuration Page & Thèmes
-st.set_page_config(page_title="Dashboard Analytics V26", layout="wide")
+st.set_page_config(page_title="Dashboard Analytics V27", layout="wide")
 
 # --- GESTION DES THÈMES ---
-# Définition des palettes de couleurs selon le corps d'armée
 THEMES = {
     "Marine (Mer)": {
-        "primary": "#0A2463",       # Bleu Marine Profond
-        "card_bg": "#0A2463",       # Fond des cartes KPI
-        "bar_vol": "#3E92CC",       # Barre de volume (Bleu clair)
-        "palette": ['#0A2463', '#3E92CC', '#247BA0', '#DFF3E3', '#60A5FA', '#1E3A8A', '#93C5FD'], # Dégradé Bleus
-        "bg_main": "#F0F4F8"        # Fond très clair bleuté
+        "primary": "#0A2463",
+        "card_bg": "#0A2463",
+        "bar_vol": "#3E92CC",
+        "palette": ['#0A2463', '#3E92CC', '#247BA0', '#DFF3E3', '#60A5FA', '#1E3A8A', '#93C5FD'],
+        "bg_main": "#F0F4F8"
     },
     "Air (Ciel)": {
-        "primary": "#0077B6",       # Bleu Ciel Vif
-        "card_bg": "#0077B6",       # Fond des cartes KPI
-        "bar_vol": "#90E0EF",       # Barre de volume (Cyan très clair)
-        "palette": ['#0077B6', '#0096C7', '#48CAE4', '#90E0EF', '#ADE8F4', '#023E8A', '#CAF0F8'], # Dégradé Ciels
-        "bg_main": "#F5FBFF"        # Fond blanc/ciel
+        "primary": "#0077B6",
+        "card_bg": "#0077B6",
+        "bar_vol": "#90E0EF",
+        "palette": ['#0077B6', '#0096C7', '#48CAE4', '#90E0EF', '#ADE8F4', '#023E8A', '#CAF0F8'],
+        "bg_main": "#F5FBFF"
     },
     "Terre (Sol)": {
-        "primary": "#2D3E29",       # Vert Armée / Kaki foncé
-        "card_bg": "#3A5A40",       # Fond des cartes KPI
-        "bar_vol": "#A3B18A",       # Barre de volume (Sauge)
-        "palette": ['#3A5A40', '#588157', '#A3B18A', '#DAD7CD', '#344E41', '#606C38', '#283618'], # Dégradé Verts/Terres
-        "bg_main": "#F7F8F6"        # Fond beige/vert très pâle
+        "primary": "#2D3E29",
+        "card_bg": "#3A5A40",
+        "bar_vol": "#A3B18A",
+        "palette": ['#3A5A40', '#588157', '#A3B18A', '#DAD7CD', '#344E41', '#606C38', '#283618'],
+        "bg_main": "#F7F8F6"
     }
 }
 
-# 2. Sidebar : Configuration & Choix du Thème
+# 2. Sidebar : Configuration
 st.sidebar.title("⚙️ Configuration")
-
-# SÉLECTEUR DE THÈME
 selected_theme_name = st.sidebar.selectbox("🎨 Thème Visuel", list(THEMES.keys()), index=0)
 current_theme = THEMES[selected_theme_name]
-
 uploaded_file = st.sidebar.file_uploader("Charger le fichier de données", type=["xlsx"])
 
-# 3. Style CSS DYNAMIQUE (Injecte les couleurs du thème choisi)
+# 3. Style CSS DYNAMIQUE
 st.markdown(f"""
     <style>
     .main {{ background-color: {current_theme['bg_main']}; }}
-    
-    /* Cards KPI style 'Hotaru' : sombre, plat, ombre légère */
     .stat-card {{
         background-color: {current_theme['card_bg']}; 
-        color: white; 
-        padding: 20px;
-        border-radius: 8px; 
-        text-align: center; 
-        margin-bottom: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        color: white; padding: 20px; border-radius: 8px; text-align: center; 
+        margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }}
     .stat-card h3 {{ color: white !important; margin: 0; font-size: 28px; }}
     .stat-card small {{ text-transform: uppercase; letter-spacing: 1px; font-size: 12px; opacity: 0.9; }}
-
-    /* Tableau */
     .comparison-table {{ width: 100%; border-collapse: separate; border-spacing: 0 5px; font-size: 13px; }}
-    .comparison-table th {{ 
-        background: #2C3E50; /* Gris sombre neutre pour l'entête */
-        color: white; padding: 12px; text-align: center; font-weight: 500; letter-spacing: 0.5px;
-        border-radius: 4px 4px 0 0;
-    }}
+    .comparison-table th {{ background: #2C3E50; color: white; padding: 12px; text-align: center; }}
     .comparison-table tr {{ background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }}
-    .comparison-table td {{ border: none; padding: 10px; position: relative; text-align: right; height: 40px; vertical-align: middle; }}
-    .comparison-table td:first-child {{ border-radius: 4px 0 0 4px; }}
-    .comparison-table td:last-child {{ border-radius: 0 4px 4px 0; }}
-    
-    .data-bar {{ position: absolute; left: 0; top: 25%; height: 50%; z-index: 0; opacity: 0.25; border-radius: 0 2px 2px 0; }}
+    .comparison-table td {{ padding: 10px; text-align: right; vertical-align: middle; }}
+    .data-bar {{ position: absolute; left: 0; top: 25%; height: 50%; opacity: 0.25; }}
     .cell-value {{ position: relative; z-index: 1; font-weight: bold; color: #444; }}
     .regie-name {{ text-align: left !important; font-weight: bold; color: {current_theme['primary']}; min-width: 200px; }}
     </style>
 """, unsafe_allow_html=True)
 
-# 4. Fonctions utilitaires
+# 4. Fonctions
 def get_bucket(d):
     if d == 0: return "0 sec"
     if d <= 60: return f"{int(d)} sec"
@@ -99,7 +80,7 @@ if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DATA")
 
-        # --- MAPPING COLONNES ---
+        # MAPPING
         c_source_detail = 'Source'              
         c_regie_groupe  = 'Source recodifiée2'  
         c_campagne      = 'Campagne recodifiée' 
@@ -107,21 +88,18 @@ if uploaded_file:
         c_duree   = 'Durée visite'  
         c_visites = 'Visites'       
 
-        # Vérification
         required_cols = [c_source_detail, c_regie_groupe, c_campagne, c_duree, c_visites, c_variante]
         missing = [c for c in required_cols if c not in df.columns]
         if missing:
             st.error(f"❌ Colonnes introuvables : {missing}")
             st.stop()
 
-        # Nettoyage
         for col in [c_source_detail, c_regie_groupe, c_campagne, c_variante]:
             df[col] = df[col].astype(str).replace('nan', 'N/A')
 
         df['D_num'] = pd.to_numeric(df[c_duree], errors='coerce').fillna(0)
         df['V_num'] = pd.to_numeric(df[c_visites], errors='coerce').fillna(0).astype(int)
 
-        # Dataset éclaté
         df_work = pd.DataFrame({
             'Durée':    np.repeat(df['D_num'].values, df['V_num'].values),
             'Source':   np.repeat(df[c_source_detail].values, df['V_num'].values),
@@ -135,27 +113,37 @@ if uploaded_file:
         sel_src = st.sidebar.multiselect("Sources", sorted(df_work['Source'].unique()))
         sel_cmp = st.sidebar.multiselect("Campagnes", sorted(df_work['Campagne'].unique()))
         
+        # --- LOGIQUE FILTRE VARIANTES CORRIGÉE ---
         counts = df_work['Variante'].value_counts()
         exclude_low = st.sidebar.toggle("🚀 Top Variantes (>100 visites)", value=False)
-        all_variants = sorted([str(r) for r in df_work['Variante'].unique()])
-        var_list = all_variants
-        if exclude_low:
-            var_list = sorted([str(r) for r in counts.index if counts[r] >= 100])
         
-        sel_var = st.sidebar.multiselect("Variantes", var_list)
+        # Définition de la liste des variantes AUTORISÉES
+        if exclude_low:
+            allowed_variants = sorted([str(r) for r in counts.index if counts[r] >= 100])
+        else:
+            allowed_variants = sorted([str(r) for r in df_work['Variante'].unique()])
+        
+        # Le sélecteur ne montre que ce qui est autorisé
+        sel_var = st.sidebar.multiselect("Variantes", allowed_variants)
+        
         calc_mode = st.sidebar.selectbox("Calcul des Stats", ["Global (avec 0s)", "Engagement (sans 0s)"], index=1)
 
-        # Application filtres
+        # APPLICATION FILTRES
         filtered = df_work.copy()
         if sel_src: filtered = filtered[filtered['Source'].isin(sel_src)]
         if sel_cmp: filtered = filtered[filtered['Campagne'].isin(sel_cmp)]
+        
+        # 1. On filtre d'abord par la sélection manuelle si elle existe
         if sel_var: 
             filtered = filtered[filtered['Variante'].isin(sel_var)]
-        elif exclude_low: 
-            filtered = filtered[filtered['Variante'].isin(var_list)]
+        
+        # 2. SÉCURITÉ : Si le bouton >100 est ON, on re-filtre FORCÉMENT pour virer les petits
+        # C'est ça qui manquait pour le graphique !
+        if exclude_low:
+            filtered = filtered[filtered['Variante'].isin(allowed_variants)]
 
         if not filtered.empty:
-            # Stats KPI
+            # KPI
             d_all = filtered['Durée'].sort_values().values
             d_target = d_all if calc_mode == "Global (avec 0s)" else d_all[d_all > 0]
             n = len(filtered)
@@ -177,31 +165,27 @@ if uploaded_file:
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             variants_plot = sorted(filtered['Variante'].unique())
             
-            # Utilisation de la palette du thème
             theme_palette = current_theme['palette']
             
-            # Histogramme (Variantes)
             for i, v in enumerate(variants_plot):
                 v_data = filtered[filtered['Variante'] == v]
                 b_counts = v_data['Bucket'].value_counts()
-                
-                # Couleur cyclique basée sur le thème
                 col_code = theme_palette[i % len(theme_palette)]
                 
-                # Trace pour les 0s (Rebond) - AXE SECONDAIRE (GAUCHE MAINTENANT)
+                # Trace 0s (Gauche)
                 fig.add_trace(go.Bar(
                     name=v, x=["0 sec"], y=[b_counts.get("0 sec", 0)],
                     marker_color=col_code, legendgroup=v, showlegend=False, opacity=0.6
-                ), secondary_y=True) # Sera mis à gauche plus bas
+                ), secondary_y=True)
                 
-                # Trace pour l'Engagement - AXE PRINCIPAL (DROITE MAINTENANT)
+                # Trace Engagement (Droite)
                 other_b = [b for b in buckets if b != "0 sec"]
                 fig.add_trace(go.Bar(
                     name=v, x=other_b, y=[b_counts.get(b, 0) for b in other_b],
                     marker_color=col_code, legendgroup=v, showlegend=True
-                ), secondary_y=False) # Sera mis à droite plus bas
+                ), secondary_y=False)
 
-            # --- LÉGENDE STATS ---
+            # Lignes Stats
             stats_config = [
                 (q1, "Q1 (25%)", "#3498db", "dot"),
                 (med, "MÉDIANE", "#e74c3c", "solid"),
@@ -212,32 +196,20 @@ if uploaded_file:
             for val, label, color, dash in stats_config:
                 b_pos = get_bucket(val)
                 fig.add_vline(x=b_pos, line_width=3, line_dash=dash, line_color=color)
-                # Ligne fantôme pour légende
                 fig.add_trace(go.Scatter(
                     x=[None], y=[None], mode='lines',
                     line=dict(color=color, width=3, dash=dash),
                     name=f"{label} : {int(val)}s", showlegend=True
                 ), secondary_y=False)
 
-            # MISE EN PAGE & INVERSION DES AXES
             fig.update_layout(
-                barmode='stack', 
-                height=650, 
-                title_text="Distribution des durées par Variante", 
-                xaxis_title="Durée",
-                legend=dict(
-                    orientation="h", 
-                    y=1.12, x=0.5, xanchor="center",
-                    bgcolor="rgba(255,255,255,0.8)"
-                ),
+                barmode='stack', height=650, title_text="Distribution des durées par Variante", xaxis_title="Durée",
+                legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center", bgcolor="rgba(255,255,255,0.8)"),
                 margin=dict(t=100)
             )
             
-            # --- C'EST ICI QU'ON INVERSE LES AXES ---
-            # secondary_y=True correspond aux barres 0s (Rebond) -> On le force à GAUCHE ('left')
+            # AXES INVERSÉS (Gauche = 0s / Droite = Engagé)
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True, side="left", showgrid=False)
-            
-            # secondary_y=False correspond aux barres Engagement -> On le force à DROITE ('right')
             fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False, side="right", showgrid=True)
 
             st.plotly_chart(fig, use_container_width=True)
@@ -261,7 +233,6 @@ if uploaded_file:
                     p2 = (c_30_180 / vol * 100)
                     p3 = (c_180_plus / vol * 100)
                     
-                    # Barre de volume dynamique selon le thème
                     bar_vol_color = current_theme['bar_vol']
 
                     comp_rows.append(f"""
