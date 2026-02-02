@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V17", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V18", layout="wide")
 
 # 2. Style CSS
 st.markdown("""
@@ -47,20 +47,43 @@ if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DATA")
         
+        # --- 🔧 MAPPING DES COLONNES (A VERIFIER ICI) ---
+        # Si vous avez renommé vos colonnes, assurez-vous que les noms ci-dessous correspondent EXACTEMENT à votre Excel
+        col_source = 'Source'       # Nom de la colonne Source (vu dans l'image)
+        col_campagne = 'Campagne'   # Nom de la colonne Campagne
+        col_duree = 'Durée'         # Nom de la colonne Durée (Attention aux accents !)
+        
+        # ATTENTION : Dans votre ancien code, les noms étaient inversés par rapport à la logique habituelle.
+        # J'ai supposé que "Visites" contient le NOM de la Régie et une autre colonne contient le NOMBRE.
+        # Si vous avez nettoyé l'Excel, ajustez ces deux lignes :
+        col_regie_nom = 'Visites'           # La colonne qui contient le NOM de la régie (ex: Google, Meta)
+        col_volume_nb = 'Source recodifiée' # La colonne qui contient le NOMBRE de visites (chiffre entier)
+        
+        # Petit fix automatique si vous avez renommé "Source recodifiée" en "Nombre de visites" ou juste "Visites"
+        # Décommentez la ligne ci-dessous si votre colonne de chiffres s'appelle 'V_num' ou 'NB_Visites'
+        # col_volume_nb = 'NB_Visites' 
+        # -----------------------------------------------
+
+        # Vérification préventive pour éviter le crash brutal
+        missing_cols = [c for c in [col_source, col_campagne, col_duree, col_regie_nom, col_volume_nb] if c not in df.columns]
+        if missing_cols:
+            st.error(f"⚠️ Colonnes manquantes dans l'Excel : {missing_cols}")
+            st.info("Vérifiez les noms dans la section 'MAPPING DES COLONNES' du code.")
+            st.stop()
+
         # Nettoyage des types
-        for col in ['Source recodifiée2', 'Visites', 'Campagne recodifiée']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).replace('nan', 'N/A')
+        for col in [col_source, col_regie_nom, col_campagne]:
+            df[col] = df[col].astype(str).replace('nan', 'N/A')
 
-        df['D_num'] = pd.to_numeric(df['Durée'], errors='coerce').fillna(0)
-        df['V_num'] = pd.to_numeric(df['Source recodifiée'], errors='coerce').fillna(0).astype(int)
+        df['D_num'] = pd.to_numeric(df[col_duree], errors='coerce').fillna(0)
+        df['V_num'] = pd.to_numeric(df[col_volume_nb], errors='coerce').fillna(0).astype(int)
 
-        # Création du dataset
+        # Création du dataset éclaté (row repetition based on visits count)
         df_work = pd.DataFrame({
             'Durée': np.repeat(df['D_num'].values, df['V_num'].values),
-            'Source': np.repeat(df['Source recodifiée2'].values, df['V_num'].values),
-            'Regie': np.repeat(df['Visites'].values, df['V_num'].values),
-            'Campagne': np.repeat(df['Campagne recodifiée'].values, df['V_num'].values)
+            'Source': np.repeat(df[col_source].values, df['V_num'].values),
+            'Regie': np.repeat(df[col_regie_nom].values, df['V_num'].values),
+            'Campagne': np.repeat(df[col_campagne].values, df['V_num'].values)
         }).reset_index(drop=True)
 
         # Filtres Sidebar
@@ -152,4 +175,4 @@ if uploaded_file:
             st.write(f"<table class='comparison-table'><thead><tr><th>Régie</th><th>Volume</th><th>Rebond</th><th>Top (+3m)</th></tr></thead><tbody>{''.join(comp_rows)}</tbody></table>", unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Erreur : {e}")
+        st.error(f"Une erreur s'est produite : {e}")
