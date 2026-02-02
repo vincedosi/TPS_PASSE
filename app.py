@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V21", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V22", layout="wide")
 
 # 2. Style CSS
 st.markdown("""
@@ -16,12 +16,12 @@ st.markdown("""
         background-color: #1C7C54; color: white; padding: 15px;
         border-radius: 10px; text-align: center; margin-bottom: 10px;
     }
-    .comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .comparison-table th { background: #0E1512; color: white; padding: 10px; text-align: center; }
-    .comparison-table td { border: 1px solid #eee; padding: 6px; position: relative; text-align: right; height: 30px; }
-    .data-bar { position: absolute; left: 0; top: 20%; height: 60%; z-index: 0; opacity: 0.3; border-radius: 0 2px 2px 0; }
-    .cell-value { position: relative; z-index: 1; font-weight: bold; font-size: 12px; }
-    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; min-width: 150px; }
+    .comparison-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .comparison-table th { background: #0E1512; color: white; padding: 8px; text-align: center; font-size: 11px; }
+    .comparison-table td { border: 1px solid #eee; padding: 5px; position: relative; text-align: right; height: 35px; vertical-align: middle; }
+    .data-bar { position: absolute; left: 0; top: 25%; height: 50%; z-index: 0; opacity: 0.3; border-radius: 0 2px 2px 0; }
+    .cell-value { position: relative; z-index: 1; font-weight: bold; font-size: 11px; color: #333; }
+    .regie-name { text-align: left !important; background: #f9f9f9; font-weight: bold; min-width: 140px; padding-left: 10px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -154,7 +154,7 @@ if uploaded_file:
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU DÉTAILLÉ (NOUVEAU) ---
+            # --- TABLEAU DÉTAILLÉ (CORRECTION DU BUG D'AFFICHAGE) ---
             max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
             
@@ -165,9 +165,9 @@ if uploaded_file:
                     <th style="text-align:left;">Variante</th>
                     <th>Volume</th>
                     <th>0s (Rebond)</th>
-                    <th>1s - 30s (Court)</th>
-                    <th>30s - 3min (Engagé)</th>
-                    <th>> 3 min (Top)</th>
+                    <th>1-30s</th>
+                    <th>30s-3min (Eng.)</th>
+                    <th>> 3 min</th>
                 </tr>
             </thead>"""
 
@@ -175,10 +175,17 @@ if uploaded_file:
                 v_d = filtered[filtered['Variante'] == v]
                 vol = len(v_d)
                 if vol > 0:
-                    # Calcul des 4 seaux
+                    # Calcul des 4 catégories
+                    # 1. Rebond (Exactement 0)
                     c_0 = len(v_d[v_d['Durée'] == 0])
-                    c_1_30 = len(v_d[(v_d['Durée'] >= 1) & (v_d['Durée'] <= 30)])
+                    
+                    # 2. Court (Entre 0 exclu et 30 inclus)
+                    c_1_30 = len(v_d[(v_d['Durée'] > 0) & (v_d['Durée'] <= 30)])
+                    
+                    # 3. Engagé (Entre 30 exclu et 180 inclus)
                     c_30_180 = len(v_d[(v_d['Durée'] > 30) & (v_d['Durée'] <= 180)])
+                    
+                    # 4. Top (Plus de 180)
                     c_180_plus = len(v_d[v_d['Durée'] > 180])
                     
                     # Pourcentages
@@ -187,8 +194,8 @@ if uploaded_file:
                     p2 = (c_30_180 / vol * 100)
                     p3 = (c_180_plus / vol * 100)
                     
-                    # Couleurs des barres
-                    bar_vol = f"<div class='data-bar' style='width:{vol/max_v*100}%; background:#3498db;'></div>"
+                    # Construction des barres colorées
+                    bar_vol = f"<div class='data-bar' style='width:{vol/max_v*100}%; background:#A9A9A9;'></div>"
                     bar_0   = f"<div class='data-bar' style='width:{p0}%; background:#e74c3c;'></div>" # Rouge
                     bar_1   = f"<div class='data-bar' style='width:{p1}%; background:#f1c40f;'></div>" # Jaune
                     bar_2   = f"<div class='data-bar' style='width:{p2}%; background:#3498db;'></div>" # Bleu
@@ -206,7 +213,9 @@ if uploaded_file:
                     """
                     comp_rows.append(row_html)
 
-            st.write(f"<table class='comparison-table'>{table_header}<tbody>{''.join(comp_rows)}</tbody></table>", unsafe_allow_html=True)
+            # NOTE: Utilisation de st.markdown au lieu de st.write pour éviter le bug d'affichage HTML
+            final_table_html = f"<table class='comparison-table'>{table_header}<tbody>{''.join(comp_rows)}</tbody></table>"
+            st.markdown(final_table_html, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Une erreur s'est produite : {e}")
