@@ -6,9 +6,9 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 
 # 1. Configuration Page
-st.set_page_config(page_title="Marine Nationale - Dashboard V23", layout="wide")
+st.set_page_config(page_title="Marine Nationale - Dashboard V24", layout="wide")
 
-# 2. Style CSS (Identique à votre original)
+# 2. Style CSS
 st.markdown("""
     <style>
     .main { background-color: #F6FBF8; }
@@ -144,39 +144,48 @@ if uploaded_file:
                     marker_color=col_code, legendgroup=v, showlegend=True
                 ), secondary_y=False)
 
+            # Lignes verticales AVEC ANNOTATIONS
             stats_colors = {"q1": "#3498db", "med": "#e74c3c", "q3": "#2ecc71", "moy": "#f39c12"}
-            for val, name, col, dash in [(q1,'Q1','q1','dot'), (med,'MED','med','solid'), (q3,'Q3','q3','dot'), (mean_v,'MOY','moy','dash')]:
+            
+            # Boucle modifiée pour ajouter les labels en haut
+            for val, name, col, dash in [(q1,'Q1','q1','dot'), (med,'MÉDIANE','med','solid'), (q3,'Q3','q3','dot'), (mean_v,'MOYENNE','moy','dash')]:
                 b_pos = get_bucket(val)
-                fig.add_vline(x=b_pos, line_width=2, line_dash=dash, line_color=stats_colors[col])
+                fig.add_vline(
+                    x=b_pos, 
+                    line_width=3, 
+                    line_dash=dash, 
+                    line_color=stats_colors[col],
+                    annotation_text=name,           # Ajout du nom
+                    annotation_position="top right", # Position en haut
+                    annotation_font_size=12,
+                    annotation_font_color=stats_colors[col],
+                    annotation_font_family="Arial Black"
+                )
 
             fig.update_layout(barmode='stack', height=600, title_text="Distribution par Variante", xaxis_title="Durée", legend=dict(orientation="h", y=-0.3))
             fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False)
             fig.update_yaxes(title_text="Volume Rebond (0s)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- TABLEAU REVENU AU CODE INITIAL ---
+            # --- TABLEAU (Version HTML stable) ---
             max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
             
-            # Calcul et création des lignes HTML
             for v in variants_plot:
                 v_d = filtered[filtered['Variante'] == v]
                 vol = len(v_d)
                 
                 if vol > 0:
-                    # Calculs des tranches
                     c_0 = len(v_d[v_d['Durée'] == 0])
                     c_1_30 = len(v_d[(v_d['Durée'] > 0) & (v_d['Durée'] <= 30)])
                     c_30_180 = len(v_d[(v_d['Durée'] > 30) & (v_d['Durée'] <= 180)])
                     c_180_plus = len(v_d[v_d['Durée'] > 180])
                     
-                    # Pourcentages
                     p0 = (c_0 / vol * 100)
                     p1 = (c_1_30 / vol * 100)
                     p2 = (c_30_180 / vol * 100)
                     p3 = (c_180_plus / vol * 100)
                     
-                    # Création ligne HTML (Exactement comme V17)
                     comp_rows.append(f"""
                     <tr>
                         <td class='regie-name'>{v}</td>
@@ -187,7 +196,6 @@ if uploaded_file:
                         <td><div class='data-bar' style='width:{p3}%; background:#2ecc71;'></div><span class='cell-value'>{p3:.1f}%</span></td>
                     </tr>""")
 
-            # Affichage FINAL (Méthode V17 qui marchait)
             st.write(f"""
             <table class='comparison-table'>
                 <thead>
