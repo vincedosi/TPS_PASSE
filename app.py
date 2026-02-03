@@ -9,26 +9,34 @@ import plotly.express as px
 st.set_page_config(page_title="Dashboard Analytics V28", layout="wide")
 
 # --- GESTION DES THÈMES ---
+
+# Palette "D3" standard pour une distinction maximale (12 couleurs)
+PALETTE_DISTINCTE = [
+    '#1F77B4', '#FF7F0E', '#2CA02C', '#D62728', '#9467BD', 
+    '#8C564B', '#E377C2', '#7F7F7F', '#BCBD22', '#17BECF', 
+    '#000000', '#FFD700'
+]
+
 THEMES = {
     "Marine (Mer)": {
         "primary": "#0A2463",
         "card_bg": "#0A2463",
-        "bar_vol": "#A9CCE3",  # Plus clair pour lisibilité
-        "palette": ['#0A2463', '#3E92CC', '#247BA0', '#60A5FA', '#1E3A8A'],
+        "bar_vol": "#A9CCE3",  
+        "palette": PALETTE_DISTINCTE, # Couleurs variées pour le graph
         "bg_main": "#F0F4F8"
     },
     "Air (Ciel)": {
         "primary": "#0077B6",
         "card_bg": "#0077B6",
         "bar_vol": "#BDE0FE",
-        "palette": ['#0077B6', '#0096C7', '#48CAE4', '#023E8A', '#CAF0F8'],
+        "palette": PALETTE_DISTINCTE, # Couleurs variées pour le graph
         "bg_main": "#F5FBFF"
     },
     "Terre (Sol)": {
         "primary": "#2D3E29",
         "card_bg": "#3A5A40",
         "bar_vol": "#D4D8D0",
-        "palette": ['#3A5A40', '#588157', '#A3B18A', '#344E41', '#606C38'],
+        "palette": PALETTE_DISTINCTE, # Couleurs variées pour le graph
         "bg_main": "#F7F8F6"
     }
 }
@@ -39,7 +47,7 @@ selected_theme_name = st.sidebar.selectbox("🎨 Thème Visuel", list(THEMES.key
 current_theme = THEMES[selected_theme_name]
 uploaded_file = st.sidebar.file_uploader("Charger le fichier de données", type=["xlsx"])
 
-# 3. Style CSS (CORRIGÉ ICI)
+# 3. Style CSS
 st.markdown(f"""
     <style>
     .main {{ background-color: {current_theme['bg_main']}; }}
@@ -53,12 +61,11 @@ st.markdown(f"""
     .stat-card h3 {{ color: white !important; margin: 0; font-size: 28px; }}
     .stat-card small {{ text-transform: uppercase; letter-spacing: 1px; font-size: 12px; opacity: 0.9; }}
     
-    /* TABLEAU - LE FIX EST ICI */
+    /* TABLEAU */
     .comparison-table {{ width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 13px; }}
     .comparison-table th {{ background: #2C3E50; color: white; padding: 12px; text-align: center; border-radius: 4px; }}
     .comparison-table tr {{ background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-radius: 4px; }}
     
-    /* C'est cette ligne 'position: relative' qui manquait et qui a tout cassé */
     .comparison-table td {{ 
         position: relative; 
         padding: 8px 12px; 
@@ -67,14 +74,14 @@ st.markdown(f"""
         border-bottom: 1px solid #eee;
     }}
     
-    /* Barres de données : mieux contenues */
+    /* Barres de données */
     .data-bar {{ 
         position: absolute; 
         left: 0; 
         top: 15%; 
         height: 70%; 
         z-index: 0; 
-        opacity: 0.3; /* Transparence pour voir le texte */
+        opacity: 0.3; 
         border-radius: 0 4px 4px 0; 
     }}
     
@@ -83,7 +90,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# 4. Fonctions
+# 4. Fonctions Helpers
 def get_bucket(d):
     if d == 0: return "0 sec"
     if d <= 60: return f"{int(d)} sec"
@@ -98,12 +105,12 @@ def get_sort_val(b):
     try: return int(b.split("-")[0].replace(" sec", ""))
     except: return 0
 
-# 5. Logique
+# 5. Logique Principale
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, sheet_name="DATA")
 
-        # Mapping
+        # Mapping des colonnes
         c_source_detail = 'Source'              
         c_regie_groupe  = 'Source recodifiée2'  
         c_campagne      = 'Campagne recodifiée' 
@@ -117,12 +124,14 @@ if uploaded_file:
             st.error(f"❌ Colonnes introuvables : {missing}")
             st.stop()
 
+        # Nettoyage
         for col in [c_source_detail, c_regie_groupe, c_campagne, c_variante]:
             df[col] = df[col].astype(str).replace('nan', 'N/A')
 
         df['D_num'] = pd.to_numeric(df[c_duree], errors='coerce').fillna(0)
         df['V_num'] = pd.to_numeric(df[c_visites], errors='coerce').fillna(0).astype(int)
 
+        # Expansion des données
         df_work = pd.DataFrame({
             'Durée':    np.repeat(df['D_num'].values, df['V_num'].values),
             'Source':   np.repeat(df[c_source_detail].values, df['V_num'].values),
@@ -131,7 +140,7 @@ if uploaded_file:
             'Variante': np.repeat(df[c_variante].values, df['V_num'].values)
         }).reset_index(drop=True)
 
-        # Filtres
+        # --- FILTRES ---
         st.sidebar.header("🎯 Filtres")
         sel_src = st.sidebar.multiselect("Sources", sorted(df_work['Source'].unique()))
         sel_cmp = st.sidebar.multiselect("Campagnes", sorted(df_work['Campagne'].unique()))
@@ -147,7 +156,7 @@ if uploaded_file:
         sel_var = st.sidebar.multiselect("Variantes", allowed_variants)
         calc_mode = st.sidebar.selectbox("Calcul des Stats", ["Global (avec 0s)", "Engagement (sans 0s)"], index=1)
 
-        # Application
+        # Application des filtres
         filtered = df_work.copy()
         if sel_src: filtered = filtered[filtered['Source'].isin(sel_src)]
         if sel_cmp: filtered = filtered[filtered['Campagne'].isin(sel_cmp)]
@@ -157,7 +166,7 @@ if uploaded_file:
             filtered = filtered[filtered['Variante'].isin(allowed_variants)]
 
         if not filtered.empty:
-            # Stats
+            # --- KPI ---
             d_all = filtered['Durée'].sort_values().values
             d_target = d_all if calc_mode == "Global (avec 0s)" else d_all[d_all > 0]
             n = len(filtered)
@@ -172,17 +181,21 @@ if uploaded_file:
             c3.markdown(f'<div class="stat-card"><h3>{int(med)}s</h3><small>MÉDIANE</small></div>', unsafe_allow_html=True)
             c4.markdown(f'<div class="stat-card"><h3>{int(mean_v)}s</h3><small>MOYENNE</small></div>', unsafe_allow_html=True)
 
-            # Graphique
+            # --- GRAPHIQUE ---
             filtered['Bucket'] = filtered['Durée'].apply(get_bucket)
             buckets = sorted(filtered['Bucket'].unique(), key=get_sort_val)
             
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             variants_plot = sorted(filtered['Variante'].unique())
+            
+            # Utilisation de la nouvelle palette distincte
             theme_palette = current_theme['palette']
             
             for i, v in enumerate(variants_plot):
                 v_data = filtered[filtered['Variante'] == v]
                 b_counts = v_data['Bucket'].value_counts()
+                
+                # Sélection cyclique de la couleur dans la palette variée
                 col_code = theme_palette[i % len(theme_palette)]
                 
                 # Axe gauche (0s)
@@ -219,7 +232,7 @@ if uploaded_file:
             fig.update_yaxes(title_text="Sessions Engagées", secondary_y=False, side="right", showgrid=True)
             st.plotly_chart(fig, use_container_width=True)
 
-            # Tableau HTML
+            # --- TABLEAU HTML ---
             max_v = filtered['Variante'].value_counts().max()
             comp_rows = []
             
